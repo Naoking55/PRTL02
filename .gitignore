@@ -57,3 +57,7 @@ temp/
 # Output files (PRTLs for testing)
 *.prtl
 test_projects/
+
+# Debug scripts
+debug_*.py
+*_structure.txt
