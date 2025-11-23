@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legacy Title PRTL Exporter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #323232;
+            color: #e0e0e0;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            height: 100%;
+        }
+
+        h1 {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #ffffff;
+            border-bottom: 2px solid #5a5a5a;
+            padding-bottom: 10px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            background-color: #404040;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #b8b8b8;
+        }
+
+        button {
+            background-color: #4080ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #3060d0;
+        }
+
+        button:active {
+            background-color: #2050b0;
+        }
+
+        button:disabled {
+            background-color: #666666;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #505050;
+            border-radius: 4px;
+            min-height: 80px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #c0c0c0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .info {
+            font-size: 12px;
+            color: #a0a0a0;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+        .success {
+            color: #4caf50;
+        }
+
+        .error {
+            color: #f44336;
+        }
+
+        .warning {
+            color: #ff9800;
+        }
+
+        #titleList {
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: #505050;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .title-item {
+            padding: 5px;
+            margin-bottom: 5px;
+            background-color: #606060;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .title-item:hover {
+            background-color: #707070;
+        }
+
+        .title-item.selected {
+            background-color: #4080ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Legacy Title PRTL Exporter</h1>
+
+        <div class="section">
+            <div class="section-title">1. レガシータイトルを検出</div>
+            <button id="scanBtn">タイムラインをスキャン</button>
+            <div id="titleList"></div>
+            <div class="info">アクティブシーケンス内のレガシータイトルを検出します</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">2. PRTLファイルとしてエクスポート</div>
+            <button id="exportBtn" disabled>選択したタイトルをエクスポート</button>
+            <button id="exportAllBtn" disabled>すべてのタイトルをエクスポート</button>
+            <div class="info">レガシータイトルをPRTL形式で保存します</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">ステータス</div>
+            <div id="status">準備完了</div>
+        </div>
+    </div>
+
+    <script src="./CSInterface.js"></script>
+    <script src="./index.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "legacy-title-prtl-exporter",
+  "version": "1.0.0",
+  "description": "Premiere Pro 2021 CEP Extension for exporting Legacy Titles to PRTL format",
+  "main": "client/index.js",
+  "scripts": {
+    "install-csinterface": "curl -o client/CSInterface.js https://raw.githubusercontent.com/Adobe-CEP/CEP-Resources/master/CEP_10.x/CSInterface.js"
+  },
+  "keywords": [
+    "premiere-pro",
+    "cep",
+    "extension",
+    "legacy-title",
+    "prtl",
+    "exporter"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/PRTL02.git"
+  },
+  "engines": {
+    "premiere": "15.x"
+  }
+}
