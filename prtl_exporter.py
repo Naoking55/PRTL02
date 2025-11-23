@@ -125,8 +125,8 @@ class PRTLExporter:
     def log(self, message):
         """ステータスログを追加"""
         if self.gui_mode:
-            self.status_text.insert(tk.END, f"{message}\n")
-            self.status_text.see(tk.END)
+            self.status_text.insert(self.tk.END, f"{message}\n")
+            self.status_text.see(self.tk.END)
             self.root.update()
         else:
             print(message)
