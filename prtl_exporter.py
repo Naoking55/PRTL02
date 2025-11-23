@@ -185,112 +185,162 @@ class PRTLExporter:
         version = root.get('Version', 'Unknown')
         self.log(f"PremiereData Version: {version}")
 
-        # すべてのProjectItemを探索
-        # レガシータイトルは通常 MediaSource の中に埋め込まれている
-        for elem in root.iter():
-            # タイトルを示すClassIDを探す
-            # ClassIDは環境によって異なる可能性があるため、複数のパターンをチェック
-            class_id = elem.get('ClassID', '')
+        # レガシータイトルのClassID
+        LEGACY_TITLE_CLASS_ID = "fb11c33a-b0a9-4465-aa94-b6d5db2628cf"
 
-            # レガシータイトルの可能性がある要素を探す
-            # 1. "Title" という名前を持つ要素
-            # 2. 特定のClassIDを持つ要素
-            # 3. MediaSource内のContentノード
+        # すべてのMasterClipを探索
+        for master_clip in root.iter('MasterClip'):
+            class_id = master_clip.get('ClassID', '')
 
-            if elem.tag == 'Title' or 'Title' in elem.tag:
-                title_data = self.extract_title_data(elem)
-                if title_data:
-                    titles.append(title_data)
+            # レガシータイトルのClassIDと一致するか確認
+            if class_id == LEGACY_TITLE_CLASS_ID:
+                self.log(f"レガシータイトルのMasterClipを発見: ClassID={class_id}")
 
-            # ContentノードでPRTLデータを含むものを探す
-            if elem.tag == 'Content' or elem.tag == 'MasterClip':
-                # 名前をチェック
-                name_elem = elem.find('.//Name')
-                if name_elem is not None and name_elem.text:
-                    # MediaSourceをチェック
-                    media_source = elem.find('.//MediaSource')
-                    if media_source is not None:
-                        # ここにタイトルデータが埋め込まれている可能性
-                        title_data = self.extract_title_from_media_source(elem, media_source)
-                        if title_data:
-                            titles.append(title_data)
+                # 名前を取得
+                name_elem = master_clip.find('.//Name')
+                title_name = name_elem.text if name_elem is not None and name_elem.text else "Untitled"
 
-        # 重複を除去（ObjectIDベース）
-        seen = set()
-        unique_titles = []
-        for title in titles:
-            obj_id = title.get('object_id')
-            if obj_id and obj_id not in seen:
-                seen.add(obj_id)
-                unique_titles.append(title)
+                # Clip要素からVideoClipを探す
+                # MasterClip/Clips/Clip[@ObjectRef] → VideoClip[@ObjectID]
+                clip_ref_elem = master_clip.find('.//Clip[@ObjectRef]')
+                if clip_ref_elem is not None:
+                    clip_ref = clip_ref_elem.get('ObjectRef')
+                    self.log(f"  Clip ObjectRef: {clip_ref}")
 
-        return unique_titles
+                    # VideoClipを探す
+                    video_clip = self.find_videoclip_by_id(root, clip_ref)
+                    if video_clip is not None:
+                        self.log(f"  VideoClipを発見")
 
-    def extract_title_data(self, elem):
-        """タイトル要素からデータを抽出"""
+                        # VideoClip/Clip/Source[@ObjectRef] → VideoMediaSource[@ObjectID]
+                        source_elem = video_clip.find('.//Source[@ObjectRef]')
+                        if source_elem is not None:
+                            media_source_ref = source_elem.get('ObjectRef')
+                            self.log(f"  Source ObjectRef: {media_source_ref}")
+
+                            # Media要素を探す
+                            media = self.find_media_by_source_ref(root, media_source_ref)
+                            if media:
+                                self.log(f"  Media要素を発見")
+                                # ImporterPrefsからPRTLデータを取得
+                                prtl_data = self.extract_prtl_from_media(media)
+                                if prtl_data:
+                                    titles.append({
+                                        'name': self.sanitize_filename(title_name),
+                                        'object_id': master_clip.get('ObjectUID'),
+                                        'prtl_content': prtl_data
+                                    })
+                                    self.log(f"  ✓ PRTLデータを抽出: {title_name}")
+                                else:
+                                    self.log(f"  ✗ PRTLデータが空です: {title_name}")
+                            else:
+                                self.log(f"  ✗ Media要素が見つかりません")
+                        else:
+                            self.log(f"  ✗ Source要素が見つかりません")
+                    else:
+                        self.log(f"  ✗ VideoClipが見つかりません (ObjectID={clip_ref})")
+                else:
+                    self.log(f"  ✗ Clip要素が見つかりません")
+
+        return titles
+
+    def find_videoclip_by_id(self, root, object_id):
+        """ObjectIDでVideoClipを探す"""
+        for videoclip in root.iter('VideoClip'):
+            if videoclip.get('ObjectID') == object_id:
+                return videoclip
+        return None
+
+    def find_media_by_source_ref(self, root, object_ref):
+        """ObjectRefからMedia要素を探す"""
+        # VideoMediaSource要素を探す
+        for video_media_source in root.iter('VideoMediaSource'):
+            if video_media_source.get('ObjectID') == object_ref:
+                # MediaSource内のMedia参照を取得
+                media_elem = video_media_source.find('.//Media')
+                if media_elem is not None:
+                    media_uid = media_elem.get('ObjectURef')
+                    if media_uid:
+                        # UIDでMedia要素を探す
+                        for media in root.iter('Media'):
+                            if media.get('ObjectUID') == media_uid:
+                                return media
+        return None
+
+    def extract_prtl_from_media(self, media):
+        """Media要素からImporterPrefsのPRTLデータを抽出"""
+        import base64
+        import zlib
+
         try:
-            # XMLツリー全体を文字列として取得
-            xml_str = ET.tostring(elem, encoding='unicode')
-
-            # 名前を取得
-            name_elem = elem.find('.//Name')
-            name = name_elem.text if name_elem is not None and name_elem.text else 'Untitled'
-
-            return {
-                'name': self.sanitize_filename(name),
-                'object_id': elem.get('ObjectID'),
-                'xml_content': xml_str
-            }
-        except Exception as e:
-            self.log(f"タイトルデータ抽出エラー: {str(e)}")
-            return None
-
-    def extract_title_from_media_source(self, parent_elem, media_source_elem):
-        """MediaSourceからタイトルデータを抽出"""
-        try:
-            # タイトルかどうかをチェック
-            # VideoMediaSourceやAudioMediaSourceではなく、特定のタイプをチェック
-            class_id = media_source_elem.get('ClassID', '')
-
-            # 名前を取得
-            name_elem = parent_elem.find('.//Name')
-            if name_elem is None or not name_elem.text:
+            # ImporterPrefs要素を探す
+            importer_prefs = media.find('.//ImporterPrefs')
+            if importer_prefs is None:
                 return None
 
-            name = name_elem.text
+            # Encoding属性を確認
+            encoding = importer_prefs.get('Encoding', '')
+            if encoding != 'base64':
+                self.log(f"  警告: 予期しないEncoding: {encoding}")
+                return None
 
-            # "Title"という文字を含むか、特定の条件を満たすかチェック
-            # これは発見的なアプローチなので、実際のデータ構造に応じて調整が必要
-            if 'title' in name.lower() or 'タイトル' in name.lower():
-                xml_str = ET.tostring(media_source_elem, encoding='unicode')
+            # Base64データを取得
+            base64_data = importer_prefs.text
+            if not base64_data or not base64_data.strip():
+                return None
 
-                # さらに詳細なチェック: PRTLデータっぽい構造があるか
-                if self.looks_like_prtl_data(media_source_elem):
-                    return {
-                        'name': self.sanitize_filename(name),
-                        'object_id': media_source_elem.get('ObjectID'),
-                        'xml_content': xml_str
-                    }
+            # Base64デコード
+            try:
+                binary_data = base64.b64decode(base64_data.strip())
+            except Exception as e:
+                self.log(f"  Base64デコードエラー: {str(e)}")
+                return None
 
-            return None
+            # "CompressedTitle"ヘッダーをチェック
+            if b'CompressedTitle' in binary_data[:100]:
+                self.log(f"  CompressedTitleヘッダーを検出")
+
+                # データからPRTL部分を抽出
+                # ヘッダーをスキップして圧縮データを探す
+                # zlib圧縮データは 0x78 0x9c または 0x78 0xda で始まることが多い
+                zlib_start = -1
+                for i in range(len(binary_data) - 1):
+                    if binary_data[i] == 0x78 and binary_data[i+1] in [0x9c, 0xda, 0x01]:
+                        zlib_start = i
+                        break
+
+                if zlib_start >= 0:
+                    try:
+                        # zlib解凍
+                        decompressed = zlib.decompress(binary_data[zlib_start:])
+                        self.log(f"  解凍成功: {len(decompressed)} bytes")
+
+                        # UTF-16でデコード (Premiere Proのタイトルデータは通常UTF-16)
+                        try:
+                            prtl_text = decompressed.decode('utf-16', errors='ignore')
+                            self.log(f"  UTF-16デコード成功: {len(prtl_text)} chars")
+                            return prtl_text
+                        except:
+                            # UTF-16が失敗したらUTF-8を試す
+                            prtl_text = decompressed.decode('utf-8', errors='ignore')
+                            self.log(f"  UTF-8デコード成功: {len(prtl_text)} chars")
+                            return prtl_text
+                    except Exception as e:
+                        self.log(f"  zlib解凍エラー: {str(e)}")
+                        return None
+
+            # 圧縮されていない場合は、そのまま返す
+            try:
+                return binary_data.decode('utf-16', errors='ignore')
+            except:
+                try:
+                    return binary_data.decode('utf-8', errors='ignore')
+                except:
+                    return None
+
         except Exception as e:
+            self.log(f"  PRTL抽出エラー: {str(e)}")
             return None
-
-    def looks_like_prtl_data(self, elem):
-        """要素がPRTLデータを含むかチェック"""
-        # タイトル特有の要素やプロパティを探す
-        # 例: TitleGraphic, TextStyle, など
-        xml_str = ET.tostring(elem, encoding='unicode').lower()
-
-        prtl_indicators = [
-            'titlegraphic',
-            'textstyle',
-            'titleobject',
-            'drawingsettings',
-            'titlestyle'
-        ]
-
-        return any(indicator in xml_str for indicator in prtl_indicators)
 
     def sanitize_filename(self, name):
         """ファイル名として使用できるように文字列をサニタイズ"""
@@ -312,6 +362,9 @@ class PRTLExporter:
             downloads = Path.home() / 'Downloads'
         else:  # Linux
             downloads = Path.home() / 'Downloads'
+
+        # Downloadsフォルダが存在しない場合は作成
+        downloads.mkdir(exist_ok=True)
 
         # prtlサブフォルダを作成
         prtl_folder = downloads / 'prtl'
@@ -336,10 +389,11 @@ class PRTLExporter:
             success_count = 0
             for i, title in enumerate(self.titles, 1):
                 name = title['name']
-                xml_content = title['xml_content']
+                prtl_content = title.get('prtl_content', '')
 
-                # PRTLファイルを作成
-                prtl_content = self.create_prtl_content(xml_content, name)
+                if not prtl_content:
+                    self.log(f"⚠ スキップ（データなし）: {name}")
+                    continue
 
                 # ファイル名を生成
                 filename = f"{name}.prtl"
